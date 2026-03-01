@@ -75,6 +75,25 @@ export function ItineraryBuilder({
   const cityName = city.name.split(",")[0]?.trim() ?? city.name;
   const todayIso = new Date().toISOString().slice(0, 10);
 
+  // When user searches or selects a different city while building, revert to first page
+  useEffect(() => {
+    setStep(1);
+    setHotels([]);
+    setActivities([]);
+    setSelectedHotel(null);
+    setSelectedActivityIds(new Set());
+    setDailyPlan([]);
+    setArrivalOptions([]);
+    setDepartureOptions([]);
+    setSelectedArrival(null);
+    setSelectedDeparture(null);
+    setFinalItinerary(null);
+    setRegretItinerary(null);
+    setOriginalItineraryForRegret(null);
+    setHotelsMessage(null);
+    setHotelSuggestionReason(null);
+  }, [city.name, city.lat, city.lng]);
+
   const prefs: UserPreferences = preferences ?? {
     interests: ["culture", "outdoor"],
     budget_level: "mid",
