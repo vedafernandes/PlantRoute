@@ -2,7 +2,6 @@
 
 import { motion } from "framer-motion";
 import type { Activity } from "@/types";
-import { CarbonBadge } from "@/components/UI/CarbonBadge";
 import { formatPrice } from "@/lib/utils";
 import {
   Landmark,
@@ -66,7 +65,6 @@ export function ActivitySelector({
           const isSelected = selectedIds.has(activity.id);
           const Icon =
             categoryIcons[activity.category?.toLowerCase() ?? ""] ?? MapPin;
-          const emission = activity.emission_kg ?? 0;
           const fitScore = "fit_score" in activity ? activity.fit_score : undefined;
 
           return (
@@ -119,9 +117,6 @@ export function ActivitySelector({
                 <p className="text-sm" style={{ color: "var(--text-muted)" }}>
                   {activity.duration_hours}h · {activity.price_tier ?? formatPrice(activity.price_usd)}
                 </p>
-                <div className="mt-1">
-                  <CarbonBadge kg={emission} />
-                </div>
               </div>
               <div
                 className="w-5 h-5 rounded-full border-2 flex-shrink-0 mt-1 flex items-center justify-center"

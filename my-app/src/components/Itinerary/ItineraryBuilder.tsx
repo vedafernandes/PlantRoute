@@ -23,6 +23,7 @@ import { carbonPredictorLocal } from "@/lib/carbon-local";
 import { HotelSelector } from "./HotelSelector";
 import { ActivitySelector } from "./ActivitySelector";
 import { TravelOptionsPanel } from "./TravelOptionsPanel";
+import { LocationSelect, DEFAULT_ORIGIN } from "./LocationSelect";
 import { CarbonCompareModal } from "@/components/UI/CarbonCompareModal";
 import { formatDate } from "@/lib/utils";
 
@@ -42,6 +43,7 @@ export function ItineraryBuilder({
   const [step, setStep] = useState(1);
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
+  const [startLocation, setStartLocation] = useState<GeoPoint>(DEFAULT_ORIGIN);
   const [preferences] = useState<UserPreferences | null>(
     initialPreferences ?? null
   );
@@ -200,20 +202,56 @@ export function ItineraryBuilder({
   useEffect(() => {
     if (step === 5 && startDate && endDate) {
       setLoadingFlights(true);
+      const originQuery = encodeURIComponent(startLocation.name.split(",")[0]?.trim() ?? startLocation.name);
       const destinationQuery = encodeURIComponent(cityName);
+      const destinationCoords = { lat: city.lat, lng: city.lng, name: cityName };
+
       Promise.all([
         fetch(
-          `/api/amadeus/flights?origin=ORD&destination=${destinationQuery}&date=${startDate}&adults=1`,
+          `/api/amadeus/flights?origin=${originQuery}&destination=${destinationQuery}&date=${startDate}&adults=1`,
           { signal: AbortSignal.timeout(10000) }
         ).then((r) => r.json()),
         fetch(
-          `/api/amadeus/flights?origin=${destinationQuery}&destination=ORD&date=${endDate}&adults=1`,
+          `/api/amadeus/flights?origin=${destinationQuery}&destination=${originQuery}&date=${endDate}&adults=1`,
           { signal: AbortSignal.timeout(10000) }
         ).then((r) => r.json()),
+        fetch("/api/travel/alternatives", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            origin: { lat: startLocation.lat, lng: startLocation.lng, name: startLocation.name },
+            destination: destinationCoords,
+            date: startDate,
+            direction: "arrival",
+          }),
+          signal: AbortSignal.timeout(15000),
+        }).then((r) => r.json()),
+        fetch("/api/travel/alternatives", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            origin: { lat: startLocation.lat, lng: startLocation.lng, name: startLocation.name },
+            destination: destinationCoords,
+            date: endDate,
+            direction: "departure",
+          }),
+          signal: AbortSignal.timeout(15000),
+        }).then((r) => r.json()),
       ])
-        .then(([arr, dep]) => {
-          setArrivalOptions(arr.flights ?? []);
-          setDepartureOptions(dep.flights ?? []);
+        .then(([arr, dep, altArr, altDep]) => {
+          const flightsArr = arr.flights ?? [];
+          const flightsDep = dep.flights ?? [];
+          const altArrOptions = altArr.alternatives ?? [];
+          const altDepOptions = altDep.alternatives ?? [];
+          const hasDistance = (seg: TransportSegment) => (seg.distance_km ?? 0) > 0;
+          const byEmission = (a: { emission_kg?: number }, b: { emission_kg?: number }) =>
+            (a.emission_kg ?? 9999) - (b.emission_kg ?? 9999);
+          setArrivalOptions(
+            [...flightsArr, ...altArrOptions].filter(hasDistance).sort(byEmission)
+          );
+          setDepartureOptions(
+            [...flightsDep, ...altDepOptions].filter(hasDistance).sort(byEmission)
+          );
         })
         .catch(() => {
           setArrivalOptions([]);
@@ -221,7 +259,7 @@ export function ItineraryBuilder({
         })
         .finally(() => setLoadingFlights(false));
     }
-  }, [step, startDate, endDate, cityName]);
+  }, [step, startDate, endDate, cityName, city.lat, city.lng, startLocation.lat, startLocation.lng, startLocation.name]);
 
 
   const handleActivityToggle = useCallback((activity: Activity) => {
@@ -479,8 +517,14 @@ export function ItineraryBuilder({
                   className="text-sm"
                   style={{ color: "var(--text-muted)" }}
                 >
-                  1. Pick your dates
+                  1. Where are you traveling from & when?
                 </p>
+                <LocationSelect
+                  value={startLocation}
+                  onChange={setStartLocation}
+                  label="Start location"
+                  placeholder="Search your city..."
+                />
                 <div className="grid grid-cols-2 gap-4">
                   <label className="block">
                     <span
@@ -625,7 +669,7 @@ export function ItineraryBuilder({
                       className="text-sm"
                       style={{ color: "var(--text-muted)" }}
                     >
-                      Your activities arranged by location to minimize travel.
+                      Activities grouped by location to minimize travel and carbon—each day focuses on one area.
                     </p>
                     <button
                       type="button"

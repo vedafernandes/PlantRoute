@@ -2,7 +2,6 @@
 
 import { motion } from "framer-motion";
 import type { Activity } from "@/types";
-import { CarbonBadge } from "@/components/UI/CarbonBadge";
 import { formatPrice } from "@/lib/utils";
 import { Landmark, UtensilsCrossed, Mountain, TreePine, Moon, Heart } from "lucide-react";
 
@@ -21,7 +20,6 @@ interface ActivityCardProps {
 
 export function ActivityCard({ activity }: ActivityCardProps) {
   const Icon = categoryIcons[activity.category?.toLowerCase() ?? ""] ?? Landmark;
-  const emission = activity.emission_kg ?? 0;
 
   return (
     <motion.div
@@ -52,9 +50,6 @@ export function ActivityCard({ activity }: ActivityCardProps) {
           <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
             {activity.duration_hours}h · {activity.price_tier ?? formatPrice(activity.price_usd)}
           </p>
-          <div className="mt-2">
-            <CarbonBadge kg={emission} />
-          </div>
         </div>
       </div>
     </motion.div>

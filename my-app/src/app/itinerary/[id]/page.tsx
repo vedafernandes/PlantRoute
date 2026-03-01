@@ -4,9 +4,10 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
-import type { Itinerary, ItineraryDay, Activity, Hotel, StoredItinerary } from "@/types";
+import type { Itinerary, ItineraryDay, Activity, Hotel, StoredItinerary, TransportSegment } from "@/types";
 import { ActivityCard } from "@/components/Itinerary/ActivityCard";
 import { TransportCard } from "@/components/Itinerary/TransportCard";
+import { TransportLegOptions } from "@/components/Itinerary/TransportLegOptions";
 import { ActivitySelector } from "@/components/Itinerary/ActivitySelector";
 import { HotelSelector } from "@/components/Itinerary/HotelSelector";
 import { SavePreferencesBanner } from "@/components/UI/SavePreferencesBanner";
@@ -14,9 +15,14 @@ import { CarbonCompareModal } from "@/components/UI/CarbonCompareModal";
 import { formatPrice, formatDate } from "@/lib/utils";
 import { applyCarbonResult } from "@/lib/apply-carbon";
 import { scoreItinerary } from "@/lib/interest-scorer";
+import { HOTEL_FACTOR_PER_NIGHT } from "@/lib/carbon";
 import { Star, Trash2, Pencil, X, Plus, Building2, GripVertical } from "lucide-react";
 
 const STORAGE_KEY = "plantroute_itineraries";
+
+function isFlight(seg: TransportSegment): boolean {
+  return seg.mode === "flight_short" || seg.mode === "flight_long";
+}
 
 export default function ItineraryDetailPage() {
   const params = useParams();
@@ -220,6 +226,29 @@ export default function ItineraryDetailPage() {
     setAddActivityDayIndex(null);
   };
 
+  const updateTransportSegment = (
+    dayIndex: number,
+    segmentId: string,
+    updates: { mode: TransportSegment["mode"]; duration_minutes: number; emission_kg: number; price_usd: number }
+  ) => {
+    if (!itinerary) return;
+    setItinerary({
+      ...itinerary,
+      days: itinerary.days.map((day, i) =>
+        i === dayIndex
+          ? {
+              ...day,
+              transport: day.transport.map((seg) =>
+                seg.id === segmentId
+                  ? { ...seg, ...updates }
+                  : seg
+              ),
+            }
+          : day
+      ),
+    });
+  };
+
   const changeHotel = (hotel: Hotel) => {
     if (!itinerary) return;
     setItinerary({
@@ -316,7 +345,6 @@ export default function ItineraryDetailPage() {
     );
   }
 
-  const totalKg = Math.max(0.01, itinerary.total_emission_kg);
   const transportKg = itinerary.days.reduce(
     (s, d) => s + d.transport.reduce((t, seg) => t + (seg.emission_kg ?? 0), 0),
     0
@@ -325,12 +353,33 @@ export default function ItineraryDetailPage() {
     (s, d) => s + d.activities.reduce((t, a) => t + (a.emission_kg ?? 0), 0),
     0
   );
-  const hotelKg = totalKg - transportKg - activityKg;
+  const hotelKg = itinerary.days.reduce(
+    (s, d) =>
+      s +
+      (d.hotel?.emission_kg_per_night ?? HOTEL_FACTOR_PER_NIGHT),
+    0
+  );
+  const totalKg = Math.max(0.01, transportKg + activityKg + hotelKg);
+
+  const totalPriceUsd =
+    itinerary.days.reduce(
+      (s, d) =>
+        s +
+        (d.hotel?.price_per_night_usd ?? 0) +
+        d.activities.reduce((a, x) => a + x.price_usd, 0) +
+        d.transport.reduce((t, x) => t + x.price_usd, 0),
+      0
+    ) || itinerary.total_price_usd;
   const stars = Math.min(5, Math.max(1, Math.round(itinerary.interest_match_score * 5)));
 
   const selectedActivityIds = new Set(
     itinerary.days.flatMap((d) => d.activities.map((a) => a.id))
   );
+
+  const firstDay = itinerary.days[0];
+  const lastDay = itinerary.days[itinerary.days.length - 1];
+  const arrivalFlight = firstDay?.transport.find(isFlight) ?? null;
+  const departureFlight = lastDay?.transport.filter(isFlight).pop() ?? null;
 
   return (
     <div className="min-h-screen" style={{ background: "var(--bg-primary)" }}>
@@ -389,7 +438,20 @@ export default function ItineraryDetailPage() {
 
       <div className="max-w-6xl mx-auto p-4 md:p-6 grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2 space-y-6">
-          {itinerary.days.map((day, dayIndex) => (
+          {/* Arrival flight - separate section at top */}
+          {arrivalFlight && (
+            <section className="rounded-2xl p-5" style={{ background: "var(--bg-elevated)", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
+              <h2 className="text-lg font-display font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
+                Arrival · {formatDate(firstDay!.date)}
+              </h2>
+              <TransportCard segment={arrivalFlight} />
+            </section>
+          )}
+
+          {/* Daily plan - activities and inter-activity transit only */}
+          {itinerary.days.map((day, dayIndex) => {
+            const interActivityTransport = day.transport.filter((s) => !isFlight(s));
+            return (
             <section key={day.date} className="rounded-2xl p-5" style={{ background: "var(--bg-elevated)", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
               <h2 className="text-lg font-display font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
                 {formatDate(day.date)}
@@ -423,11 +485,22 @@ export default function ItineraryDetailPage() {
                 </div>
               )}
 
-              {day.transport.length > 0 && (
-                <div className="space-y-2 mb-4">
-                  <p className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>Transport</p>
-                  {day.transport.map((seg) => (
-                    <TransportCard key={seg.id} segment={seg} />
+              {interActivityTransport.length > 0 && (
+                <div className="space-y-3 mb-4">
+                  <p className="text-xs font-medium" style={{ color: "var(--text-muted)" }}>
+                    Transit between activities
+                    {isEditMode ? " · Click to select" : " · Recommended route"}
+                  </p>
+                  {interActivityTransport.map((seg) => (
+                    <TransportLegOptions
+                      key={seg.id}
+                      segment={seg}
+                      onSelectOption={
+                        isEditMode
+                          ? (updates) => updateTransportSegment(dayIndex, seg.id, updates)
+                          : undefined
+                      }
+                    />
                   ))}
                 </div>
               )}
@@ -492,14 +565,22 @@ export default function ItineraryDetailPage() {
                 ))}
               </div>
             </section>
-          ))}
+          );
+          })}
         </div>
 
         <aside className="space-y-6">
           <div className="rounded-2xl p-5 sticky top-24" style={{ background: "var(--bg-elevated)", boxShadow: "0 2px 12px rgba(0,0,0,0.06)" }}>
-            <h3 className="font-display font-semibold mb-4" style={{ color: "var(--text-primary)" }}>
-              Carbon summary
-            </h3>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="font-display font-semibold" style={{ color: "var(--text-primary)" }}>
+                Carbon summary
+              </h3>
+              {isEditMode && (
+                <span className="text-xs font-medium px-2 py-0.5 rounded-full" style={{ background: "var(--accent-green-light)", color: "var(--accent-green)" }}>
+                  Live
+                </span>
+              )}
+            </div>
             <div className="w-32 h-32 mx-auto mb-4 relative">
               <svg viewBox="0 0 36 36" className="w-full h-full -rotate-90">
                 <circle cx="18" cy="18" r="16" fill="none" stroke="var(--border)" strokeWidth="3" />
@@ -539,7 +620,7 @@ export default function ItineraryDetailPage() {
               {totalKg.toFixed(0)} kg CO₂e
             </p>
             <p className="text-center text-sm mb-4" style={{ color: "var(--text-muted)" }}>
-              Total · {formatPrice(itinerary.total_price_usd)}
+              Total · {formatPrice(totalPriceUsd)}
             </p>
             <div className="flex items-center justify-center gap-1 mb-4">
               {Array.from({ length: 5 }).map((_, i) => (

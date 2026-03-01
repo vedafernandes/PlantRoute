@@ -14,7 +14,7 @@ Build travel itineraries with carbon impact. Pick a destination on the map, desc
    Copy `.env.example` to `.env.local` and fill in:
 
    - **NEXT_PUBLIC_MAPBOX_TOKEN** — [Mapbox](https://www.mapbox.com/) token for the world map. If omitted, the app falls back to Leaflet + OpenStreetMap.
-   - **GOOGLE_MAPS_API_KEY** (or **GOOGLE_MAPS_KEY**) — [Google Maps APIs](https://console.cloud.google.com/) (Geocoding + Places) for real hotels and attractions by lat/lng. If set, `/api/amadeus/hotels` and `/api/amadeus/activities` use Google Places; if omitted or the request fails, mock data is used. Debounce search requests on the client to avoid repeated API calls.
+   - **GOOGLE_MAPS_API_KEY** (or **GOOGLE_MAPS_KEY**) — [Google Maps APIs](https://console.cloud.google.com/) (Geocoding + Places + Directions) for real hotels, attractions, and transit options. Enable Geocoding, Places, and Directions APIs in Cloud Console. If set, transit options on the itinerary page use real walking/transit/driving times from Google; if omitted or the request fails, static estimates are used.
    - **AMADEUS_API_KEY** / **AMADEUS_API_SECRET** — [Amadeus](https://developers.amadeus.com/) API credentials for activities, hotels, and flights. If omitted, mock data is used.
    - **GEMINI_API_KEY** — [Google AI](https://ai.google.dev/) for parsing free-text preferences. If omitted, a keyword-based fallback is used.
    - **SUPERMEMORY_API_KEY** — [Supermemory](https://supermemory.ai/) for saving/retrieving user preferences and trip history. Required for profile and save-preferences flows.

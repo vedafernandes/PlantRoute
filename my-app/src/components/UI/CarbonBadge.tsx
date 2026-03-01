@@ -9,12 +9,12 @@ interface CarbonBadgeProps {
 
 export function CarbonBadge({ kg, className }: CarbonBadgeProps) {
   const variant =
-    kg < 20 ? "green" : kg <= 100 ? "amber" : "red";
+    kg < 20 ? "green" : kg <= 100 ? "gray" : "red";
   const bg =
     variant === "green"
       ? "#2d6a4f"
-      : variant === "amber"
-        ? "#d47c0f"
+      : variant === "gray"
+        ? "#6b7280"
         : "#c1440e";
 
   return (

@@ -46,7 +46,7 @@ export function TransportCard({ segment }: TransportCardProps) {
         <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
           {segment.distance_km != null ? `${segment.distance_km.toFixed(0)} km` : ""} · {Math.floor(durationMin / 60)}h {durationMin % 60}m
         </p>
-        {(segment.mode === "flight_short" || segment.mode === "flight_long") && segment.search_url && (
+        {segment.search_url && (
           <a
             href={segment.search_url}
             target="_blank"
@@ -54,7 +54,15 @@ export function TransportCard({ segment }: TransportCardProps) {
             className="inline-flex items-center gap-1 text-xs mt-1 font-medium hover:underline"
             style={{ color: "var(--accent-green)" }}
           >
-            View on Expedia (distance & prices)
+            {(segment.mode === "flight_short" || segment.mode === "flight_long")
+              ? "View on Expedia"
+              : segment.mode === "train"
+                ? "View Amtrak"
+                : segment.mode === "bus"
+                  ? "View Greyhound"
+                  : segment.mode === "car"
+                    ? "View on Google Maps"
+                    : "View details"}
             <ExternalLink className="w-3 h-3" />
           </a>
         )}

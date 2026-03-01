@@ -58,7 +58,7 @@ export function TravelOptionsPanel({
           Travel to destination
         </h3>
         <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
-          Choose how you want to get there. Options show price, carbon, and distance.
+          Flights plus lower-carbon alternatives (train, bus, drive). Sorted by carbon impact.
         </p>
         <div className="space-y-2">
           {arrivalOptions.length === 0 ? (
@@ -94,6 +94,9 @@ export function TravelOptionsPanel({
         <h3 className="text-sm font-medium mb-2" style={{ color: "var(--text-primary)" }}>
           Travel back home
         </h3>
+        <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
+          Flights plus train, bus, or drive options.
+        </p>
         <div className="space-y-2">
           {departureOptions.length === 0 ? (
             <p className="text-sm py-4" style={{ color: "var(--text-muted)" }}>

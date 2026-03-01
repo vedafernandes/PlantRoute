@@ -5,6 +5,7 @@
  */
 
 const GEOCODE_URL = "https://maps.googleapis.com/maps/api/geocode/json";
+const DIRECTIONS_URL = "https://maps.googleapis.com/maps/api/directions/json";
 const PLACES_NEARBY_URL = "https://maps.googleapis.com/maps/api/place/nearbysearch/json";
 const PLACE_DETAILS_URL = "https://maps.googleapis.com/maps/api/place/details/json";
 
@@ -246,6 +247,81 @@ export const PLACES_TYPES_ATTRACTIONS = [
 ] as const;
 
 export type NormalizedPlace = import("@/types").NormalizedPlace;
+
+/** Result from Directions API for one travel mode. */
+export interface DirectionsLegResult {
+  distance_km: number;
+  duration_minutes: number;
+  /** Transit fare in USD if available; otherwise null. */
+  fare_usd?: number | null;
+}
+
+type DirectionsMode = "driving" | "walking" | "transit";
+
+const DIRECTIONS_CACHE = new Map<string, { data: DirectionsLegResult; ts: number }>();
+const DIRECTIONS_CACHE_TTL_MS = 10 * 60 * 1000;
+
+function directionsCacheKey(
+  originLat: number,
+  originLng: number,
+  destLat: number,
+  destLng: number,
+  mode: DirectionsMode
+): string {
+  return `${originLat.toFixed(5)}_${originLng.toFixed(5)}_${destLat.toFixed(5)}_${destLng.toFixed(5)}_${mode}`;
+}
+
+/**
+ * Fetch directions for a single travel mode from Google Directions API.
+ * Returns null if API key missing, request fails, or ZERO_RESULTS.
+ */
+export async function fetchDirectionsForMode(
+  originLat: number,
+  originLng: number,
+  destLat: number,
+  destLng: number,
+  mode: DirectionsMode
+): Promise<DirectionsLegResult | null> {
+  const apiKey = getApiKey();
+  if (!apiKey) return null;
+
+  const cacheKey = directionsCacheKey(originLat, originLng, destLat, destLng, mode);
+  const cached = DIRECTIONS_CACHE.get(cacheKey);
+  if (cached && Date.now() - cached.ts < DIRECTIONS_CACHE_TTL_MS) return cached.data;
+
+  try {
+    const origin = `${originLat},${originLng}`;
+    const destination = `${destLat},${destLng}`;
+    const url = `${DIRECTIONS_URL}?origin=${encodeURIComponent(origin)}&destination=${encodeURIComponent(destination)}&mode=${mode}&key=${apiKey}`;
+    const res = await fetch(url, { next: { revalidate: 0 } });
+    const data = (await res.json()) as {
+      status: string;
+      routes?: Array<{
+        fare?: { value?: number; currency?: string };
+        legs?: Array<{
+          distance?: { value: number };
+          duration?: { value: number };
+          duration_in_traffic?: { value: number };
+        }>;
+      }>;
+    };
+    if (data.status !== "OK" || !data.routes?.[0]?.legs?.[0]) return null;
+    const route = data.routes[0];
+    const leg = route.legs[0];
+    const distM = leg.distance?.value ?? 0;
+    const durS = leg.duration_in_traffic?.value ?? leg.duration?.value ?? 0;
+    const fare = route.fare?.value;
+    const result: DirectionsLegResult = {
+      distance_km: distM / 1000,
+      duration_minutes: Math.ceil(durS / 60),
+      fare_usd: fare != null ? fare : null,
+    };
+    DIRECTIONS_CACHE.set(cacheKey, { data: result, ts: Date.now() });
+    return result;
+  } catch {
+    return null;
+  }
+}
 
 function toNormalizedPlace(p: PlaceResult, type: "hotel" | "attraction"): NormalizedPlace {
   return {
