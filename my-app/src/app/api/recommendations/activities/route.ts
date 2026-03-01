@@ -11,6 +11,7 @@ import {
   rankActivitiesFallback,
   type RankedActivity,
 } from "@/lib/recommendations";
+import { categorizeActivitiesWithGemini } from "@/lib/gemini";
 import type { Activity } from "@/types";
 import { normalizedPlaceToActivity } from "@/lib/places-utils";
 import type { NormalizedPlace } from "@/types";
@@ -73,6 +74,21 @@ export async function GET(req: NextRequest) {
     });
   }
 
+  const geminiKey = process.env.GEMINI_API_KEY?.trim();
+  if (geminiKey) {
+    try {
+      const categories = await categorizeActivitiesWithGemini(
+        geminiKey,
+        activities.map((a) => ({ name: a.name, category: a.category }))
+      );
+      activities.forEach((a, i) => {
+        a.category = categories[i] ?? a.category;
+      });
+    } catch (e) {
+      console.warn("[recommendations] Gemini categorization failed:", String(e));
+    }
+  }
+
   const engineUrl = process.env.PREFERENCE_ENGINE_XGBOOST_URL?.trim();
   let ranked: RankedActivity[];
 
@@ -89,16 +105,34 @@ export async function GET(req: NextRequest) {
       });
       clearTimeout(timeout);
       if (res.ok) {
-        const batch = (await res.json()) as { scores: Array<{ fit_score: number; regret_probability?: number; explanation?: string[] | null }> };
-        const scores = (batch.scores ?? []).map((s) => ({
-          fit_score: s.fit_score,
-          regret_probability: s.regret_probability ?? 0,
-          explanation: s.explanation ?? null,
-        }));
-        ranked = mergeAndRank(activities, scores);
+        const batch = (await res.json()) as {
+          scores?: Array<{ fit_score?: number; regret_probability?: number; explanation?: string[] | null }>;
+        };
+        const raw = batch.scores ?? [];
+        const expectedLen = activities.length;
+        if (raw.length !== expectedLen) {
+          console.warn(
+            "[recommendations] Engine returned scores length",
+            raw.length,
+            "expected",
+            expectedLen,
+            "- using fallback"
+          );
+          ranked = rankActivitiesFallback(activities, preferences?.interests ?? []);
+        } else {
+          const scores = raw.map((s) => {
+            const fit = typeof s.fit_score === "number" ? Math.max(0, Math.min(1, s.fit_score)) : 0.5;
+            return {
+              fit_score: fit,
+              regret_probability: typeof s.regret_probability === "number" ? s.regret_probability : 0,
+              explanation: s.explanation ?? null,
+            };
+          });
+          ranked = mergeAndRank(activities, scores);
+        }
       } else {
         const errText = await res.text().catch(() => "");
-        console.warn("[recommendations] Engine non-OK:", res.status, errText.slice(0, 200));
+        console.warn("[recommendations] Engine returned", res.status, errText.slice(0, 200));
         ranked = rankActivitiesFallback(activities, preferences?.interests ?? []);
       }
     } catch (e) {

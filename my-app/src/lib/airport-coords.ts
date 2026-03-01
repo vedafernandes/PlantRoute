@@ -17,6 +17,7 @@ export const AIRPORT_COORDS: Record<string, [number, number]> = {
   CHI: [41.9742, -87.9073],
   PAR: [49.0097, 2.5478],
   ROM: [41.8003, 12.2389],
+  FCO: [41.8003, 12.2389],
   BCN: [41.2971, 2.0785],
   MAD: [40.4983, -3.5676],
   LIS: [38.7742, -9.1342],

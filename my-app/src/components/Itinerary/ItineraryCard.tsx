@@ -3,7 +3,6 @@
 import { motion } from "framer-motion";
 import type { Itinerary } from "@/types";
 import { CarbonBadge } from "@/components/UI/CarbonBadge";
-import { formatPrice } from "@/lib/utils";
 import { Star } from "lucide-react";
 
 interface ItineraryCardProps {
@@ -48,7 +47,7 @@ export function ItineraryCard({
         <div className="flex items-center gap-0.5">
           {Array.from({ length: 5 }).map((_, i) => (
             <Star
-              key={i}
+              key={`star-${i}`}
               className="w-4 h-4"
               fill={i < stars ? "var(--accent-amber)" : "transparent"}
               style={{ color: i < stars ? "var(--accent-amber)" : "var(--border)" }}
@@ -56,11 +55,8 @@ export function ItineraryCard({
           ))}
         </div>
       </div>
-      <p className="text-2xl font-display font-semibold mb-1" style={{ color: "var(--text-primary)" }}>
-        {formatPrice(itinerary.total_price_usd)}
-      </p>
       <p className="text-sm mb-4" style={{ color: "var(--text-muted)" }}>
-        Total · {itinerary.days.length} days
+        {itinerary.days.length} days
       </p>
       <div className="mb-4">
         <CarbonBadge kg={itinerary.total_emission_kg} />

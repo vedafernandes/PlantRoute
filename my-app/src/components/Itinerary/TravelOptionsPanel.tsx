@@ -3,7 +3,6 @@
 import { motion } from "framer-motion";
 import type { TransportSegment } from "@/types";
 import { CarbonBadge } from "@/components/UI/CarbonBadge";
-import { formatPrice } from "@/lib/utils";
 import { TransportCard } from "./TransportCard";
 
 interface TravelOptionsPanelProps {
@@ -42,14 +41,16 @@ export function TravelOptionsPanel({
     (s, t) => s + (t.emission_kg ?? 0),
     0
   );
-  const interActivityPrice = interActivitySegments.reduce(
-    (s, t) => s + t.price_usd,
-    0
-  );
   const interActivityDist = interActivitySegments.reduce(
     (s, t) => s + (t.distance_km ?? 0),
     0
   );
+  const flightDist =
+    (selectedArrival?.distance_km ?? 0) + (selectedDeparture?.distance_km ?? 0);
+  const flightEmission =
+    (selectedArrival?.emission_kg ?? 0) + (selectedDeparture?.emission_kg ?? 0);
+  const totalDist = flightDist + interActivityDist;
+  const totalEmission = flightEmission + interActivityTotal;
 
   return (
     <div className="space-y-6">
@@ -58,7 +59,11 @@ export function TravelOptionsPanel({
           Travel to destination
         </h3>
         <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
+<<<<<<< Updated upstream
           Flights plus lower-carbon alternatives (train, bus, drive). Sorted by carbon impact.
+=======
+          Route with estimated distance and CO₂e. Open Google Flights for real prices and times.
+>>>>>>> Stashed changes
         </p>
         <div className="space-y-2">
           {arrivalOptions.length === 0 ? (
@@ -66,11 +71,11 @@ export function TravelOptionsPanel({
               No options found. Check origin/destination codes.
             </p>
           ) : (
-            arrivalOptions.map((seg) => {
+            arrivalOptions.map((seg, idx) => {
               const isSelected = selectedArrival?.id === seg.id;
               return (
                 <motion.button
-                  key={seg.id}
+                  key={`arrival-${seg.id}-${idx}`}
                   type="button"
                   onClick={() => onSelectArrival(seg)}
                   whileHover={{ scale: 1.01 }}
@@ -103,11 +108,11 @@ export function TravelOptionsPanel({
               No options found.
             </p>
           ) : (
-            departureOptions.map((seg) => {
+            departureOptions.map((seg, idx) => {
               const isSelected = selectedDeparture?.id === seg.id;
               return (
                 <motion.button
-                  key={seg.id}
+                  key={`departure-${seg.id}-${idx}`}
                   type="button"
                   onClick={() => onSelectDeparture(seg)}
                   whileHover={{ scale: 1.01 }}
@@ -127,6 +132,29 @@ export function TravelOptionsPanel({
         </div>
       </section>
 
+      {(selectedArrival || selectedDeparture || interActivitySegments.length > 0) && (
+        <section>
+          <h3 className="text-sm font-medium mb-2" style={{ color: "var(--text-primary)" }}>
+            Total travel
+          </h3>
+          <div
+            className="rounded-xl p-4"
+            style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)" }}
+          >
+            <div className="flex flex-wrap gap-4 items-center">
+              <span className="text-sm" style={{ color: "var(--text-muted)" }}>
+                {totalDist.toFixed(0)} km total
+              </span>
+              <CarbonBadge kg={totalEmission} />
+              <span className="text-xs" style={{ color: "var(--text-muted)" }}>
+                {selectedArrival && selectedDeparture && "Flights + "}
+                {interActivitySegments.length > 0 ? "between activities" : "Flights only"}
+              </span>
+            </div>
+          </div>
+        </section>
+      )}
+
       {interActivitySegments.length > 0 && (
         <section>
           <h3 className="text-sm font-medium mb-2" style={{ color: "var(--text-primary)" }}>
@@ -141,12 +169,9 @@ export function TravelOptionsPanel({
           >
             <div className="flex flex-wrap gap-4">
               <span className="text-sm" style={{ color: "var(--text-muted)" }}>
-                {interActivityDist.toFixed(1)} km total
+                {interActivityDist.toFixed(1)} km between activities
               </span>
               <CarbonBadge kg={interActivityTotal} />
-              <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                {formatPrice(interActivityPrice)}
-              </span>
             </div>
           </div>
         </section>

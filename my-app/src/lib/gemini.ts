@@ -1,4 +1,5 @@
 import type { Activity, Hotel, TransportSegment, UserPreferences } from "@/types";
+import { ATTRACTION_TYPES } from "@/types";
 import { GoogleGenAI, ThinkingLevel } from "@google/genai";
 import { createAmadeusClient } from "./amadeus";
 import { CITY_TO_IATA, getAirportCoords } from "./airport-coords";
@@ -96,7 +97,46 @@ export async function parsePreferencesWithGemini(
   }
 }
 
-/** Suggest one hotel from the list that is best for proximity to the selected attractions. */
+const ATTRACTION_TYPES_SET = new Set<string>(ATTRACTION_TYPES);
+
+/**
+ * Classify each activity into one of ATTRACTION_TYPES (museum, culture, outdoor, nature, food, nightlife, wellness, beach, ski)
+ * based on name (and optional category hint). Used so tabs and ML model get correct categories instead of everything "culture".
+ * Returns one category per activity in the same order; invalid/missing responses default to "culture".
+ */
+export async function categorizeActivitiesWithGemini(
+  apiKey: string,
+  activities: Array<{ name: string; category?: string }>
+): Promise<string[]> {
+  if (activities.length === 0) return [];
+  const list = activities
+    .map((a, i) => `${i + 1}. ${a.name}${a.category ? ` (current: ${a.category})` : ""}`)
+    .join("\n");
+  const allowed = ATTRACTION_TYPES.join(", ");
+  const prompt = `You are a travel activity classifier. Classify each attraction into exactly ONE of these types: ${allowed}.
+
+Attractions (one per line, same order):
+${list}
+
+Respond with ONLY a JSON array of strings, one type per attraction in the same order. No explanation. Example: ["museum","culture","outdoor"]`;
+
+  const genAI = new GoogleGenAI({ apiKey });
+  const raw = await generateWithModelFallback(genAI, {
+    contents: [{ role: "user", parts: [{ text: prompt }] }],
+  });
+  const cleaned = raw.replace(/```json?\s*/gi, "").replace(/```\s*/g, "").trim();
+  try {
+    const parsed = JSON.parse(cleaned) as unknown;
+    if (!Array.isArray(parsed)) return activities.map(() => "culture");
+    return activities.map((_, i) => {
+      const v = parsed[i];
+      const s = typeof v === "string" ? v.trim().toLowerCase() : "";
+      return ATTRACTION_TYPES_SET.has(s) ? s : "culture";
+    });
+  } catch {
+    return activities.map(() => "culture");
+  }
+}
 export async function suggestHotelByProximity(
   apiKey: string,
   city: string,

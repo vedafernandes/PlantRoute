@@ -54,7 +54,9 @@ export interface TransportSegment {
   price_usd: number;
   duration_minutes: number;
   provider?: string;
-  /** For flights: link to Expedia flight search (origin, destination, date) for actual distances/prices. */
+  /** For flights: airline logo URL (e.g. Kiwi CDN). */
+  provider_logo_url?: string;
+  /** For flights: link to Expedia search for this route (book there for accurate price). */
   search_url?: string;
 }
 

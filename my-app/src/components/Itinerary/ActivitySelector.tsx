@@ -1,8 +1,11 @@
 "use client";
 
+import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import type { Activity } from "@/types";
-import { formatPrice } from "@/lib/utils";
+import { ATTRACTION_TYPES } from "@/types";
+import { getNormalizedCategory } from "@/lib/recommendations";
+import { activityPriceTier } from "@/lib/utils";
 import {
   Landmark,
   UtensilsCrossed,
@@ -13,14 +16,17 @@ import {
   MapPin,
 } from "lucide-react";
 
+/** Icons for profile-style categories (ATTRACTION_TYPES). */
 const categoryIcons: Record<string, React.ComponentType<{ className?: string }>> = {
   museum: Landmark,
-  restaurant: UtensilsCrossed,
+  culture: Landmark,
   food: UtensilsCrossed,
   outdoor: Mountain,
   nature: TreePine,
   nightlife: Moon,
   wellness: Heart,
+  beach: Mountain,
+  ski: Mountain,
 };
 
 interface ActivitySelectorProps {
@@ -36,6 +42,18 @@ export function ActivitySelector({
   onToggle,
   loading = false,
 }: ActivitySelectorProps) {
+  const [activeCategory, setActiveCategory] = useState<string>("all");
+
+  /** Tabs match profile: All + ATTRACTION_TYPES (museum, culture, outdoor, ...). */
+  const categories = useMemo(() => ["all", ...ATTRACTION_TYPES], []);
+
+  const filteredActivities = useMemo(() => {
+    if (activeCategory === "all") return activities;
+    return activities.filter(
+      (a) => getNormalizedCategory(a.category ?? "") === activeCategory
+    );
+  }, [activities, activeCategory]);
+
   if (loading) {
     return (
       <div className="flex justify-center py-12">
@@ -60,11 +78,52 @@ export function ActivitySelector({
       <p className="text-sm" style={{ color: "var(--text-muted)" }}>
         Select activities you want to do. We&apos;ll arrange them into a daily plan.
       </p>
+
+      {/* Category tabs */}
+      <div className="flex gap-1.5 overflow-x-auto pb-1 scrollbar-thin">
+        {categories.map((cat) => {
+          const label = cat === "all" ? "All" : cat.charAt(0).toUpperCase() + cat.slice(1);
+          const isActive = activeCategory === cat;
+          const count =
+            cat === "all"
+              ? activities.length
+              : activities.filter(
+                  (a) => getNormalizedCategory(a.category ?? "") === cat
+                ).length;
+          return (
+            <button
+              key={cat}
+              type="button"
+              onClick={() => setActiveCategory(cat)}
+              className="flex-shrink-0 rounded-full px-3 py-1.5 text-sm font-medium transition-colors flex items-center gap-1.5"
+              style={{
+                background: isActive ? "var(--accent-green)" : "var(--bg-elevated)",
+                color: isActive ? "white" : "var(--text-muted)",
+                border: `1px solid ${isActive ? "var(--accent-green)" : "var(--border)"}`,
+              }}
+            >
+              {label}
+              <span
+                className="opacity-80"
+                style={{ fontSize: "0.7rem" }}
+              >
+                {count}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
       <div className="space-y-2 max-h-80 overflow-y-auto pr-1">
-        {activities.map((activity) => {
+        {filteredActivities.length === 0 ? (
+          <p className="text-sm py-4 text-center" style={{ color: "var(--text-muted)" }}>
+            No activities in this category.
+          </p>
+        ) : (
+          filteredActivities.map((activity) => {
           const isSelected = selectedIds.has(activity.id);
           const Icon =
-            categoryIcons[activity.category?.toLowerCase() ?? ""] ?? MapPin;
+            categoryIcons[getNormalizedCategory(activity.category ?? "")] ?? MapPin;
           const fitScore = "fit_score" in activity ? activity.fit_score : undefined;
 
           return (
@@ -115,7 +174,7 @@ export function ActivitySelector({
                   )}
                 </div>
                 <p className="text-sm" style={{ color: "var(--text-muted)" }}>
-                  {activity.duration_hours}h · {activity.price_tier ?? formatPrice(activity.price_usd)}
+                  {activity.duration_hours}h · {activity.price_tier ?? activityPriceTier(activity.price_usd ?? 0)}
                 </p>
               </div>
               <div
@@ -131,7 +190,8 @@ export function ActivitySelector({
               </div>
             </motion.button>
           );
-        })}
+        })
+        )}
       </div>
     </div>
   );

@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import type { Hotel } from "@/types";
 import { CarbonBadge } from "@/components/UI/CarbonBadge";
-import { formatPrice } from "@/lib/utils";
+import { hotelPriceTier } from "@/lib/utils";
 import { Star, Leaf } from "lucide-react";
 
 interface HotelSelectorProps {
@@ -96,7 +96,7 @@ export function HotelSelector({
                     <div className="flex gap-0.5">
                       {Array.from({ length: 5 }).map((_, i) => (
                         <Star
-                          key={i}
+                          key={`hotel-star-${i}`}
                           className="w-4 h-4"
                           fill={i < hotel.stars ? "var(--accent-amber)" : "transparent"}
                           style={{
@@ -106,7 +106,7 @@ export function HotelSelector({
                       ))}
                     </div>
                     <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-                      {formatPrice(hotel.price_per_night_usd)}/night
+                      {hotelPriceTier(hotel.price_per_night_usd)}
                     </span>
                   </div>
                 </div>

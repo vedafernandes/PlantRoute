@@ -33,15 +33,17 @@ export function normalizedPlaceToHotel(p: NormalizedPlace, cityName: string): Ho
 }
 
 export function normalizedPlaceToActivity(p: NormalizedPlace, cityName: string): Activity {
+  const priceUsd = p.price_level != null ? priceLevelToUsd(p.price_level) : 0;
+  const tier = p.price_tier ?? (p.price_level != null ? ["$", "$$", "$$$", "$$$$", "$$$$$"][Math.min(4, Math.max(0, p.price_level))] : undefined);
   return {
     id: p.id,
     name: p.name,
     category: "sightseeing",
     location: { lat: p.lat, lng: p.lng, name: cityName },
-    price_usd: 0,
+    price_usd: priceUsd,
     duration_hours: 1.5,
     interest_score: p.rating != null ? p.rating / 5 : undefined,
     image_url: p.photo_url,
-    price_tier: p.price_tier,
+    price_tier: tier,
   };
 }

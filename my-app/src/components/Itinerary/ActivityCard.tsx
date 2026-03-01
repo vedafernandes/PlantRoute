@@ -2,7 +2,7 @@
 
 import { motion } from "framer-motion";
 import type { Activity } from "@/types";
-import { formatPrice } from "@/lib/utils";
+import { activityPriceTier } from "@/lib/utils";
 import { Landmark, UtensilsCrossed, Mountain, TreePine, Moon, Heart } from "lucide-react";
 
 const categoryIcons: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -48,7 +48,7 @@ export function ActivityCard({ activity }: ActivityCardProps) {
             {activity.name}
           </h3>
           <p className="text-sm mt-0.5" style={{ color: "var(--text-muted)" }}>
-            {activity.duration_hours}h · {activity.price_tier ?? formatPrice(activity.price_usd)}
+            {activity.duration_hours}h · {activity.price_tier ?? activityPriceTier(activity.price_usd ?? 0)}
           </p>
         </div>
       </div>

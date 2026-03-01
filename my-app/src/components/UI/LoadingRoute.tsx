@@ -7,7 +7,7 @@ export function LoadingRoute() {
     <div className="space-y-3 rounded-xl p-4" style={{ background: "var(--bg-elevated)" }}>
       {[1, 2, 3].map((i) => (
         <motion.div
-          key={i}
+          key={`loading-skeleton-${i}`}
           className="h-10 rounded-lg"
           style={{ background: "var(--border)" }}
           animate={{ opacity: [0.5, 1, 0.5] }}

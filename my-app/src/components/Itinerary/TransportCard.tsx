@@ -1,8 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import type { TransportSegment } from "@/types";
 import { CarbonBadge } from "@/components/UI/CarbonBadge";
-import { formatPrice } from "@/lib/utils";
 import { Plane, Train, Bus, Car, Ship, Footprints, ExternalLink } from "lucide-react";
 
 const modeIcons: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -20,9 +20,13 @@ interface TransportCardProps {
 }
 
 export function TransportCard({ segment }: TransportCardProps) {
+  const [logoFailed, setLogoFailed] = useState(false);
   const Icon = modeIcons[segment.mode] ?? Car;
   const emission = segment.emission_kg ?? 0;
   const durationMin = segment.duration_minutes;
+
+  const isFlight = segment.mode === "flight_short" || segment.mode === "flight_long";
+  const showLogo = isFlight && segment.provider_logo_url && !logoFailed;
 
   return (
     <div
@@ -34,17 +38,28 @@ export function TransportCard({ segment }: TransportCardProps) {
       }}
     >
       <div
-        className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0"
-        style={{ background: "var(--accent-green-light)", color: "var(--accent-green)" }}
+        className="w-10 h-10 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden"
+        style={{ background: showLogo ? "transparent" : "var(--accent-green-light)", color: "var(--accent-green)" }}
       >
-        <Icon className="w-5 h-5" />
+        {showLogo ? (
+          <img
+            src={segment.provider_logo_url!}
+            alt=""
+            className="w-8 h-8 object-contain"
+            onError={() => setLogoFailed(true)}
+          />
+        ) : (
+          <Icon className="w-5 h-5" />
+        )}
       </div>
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm" style={{ color: "var(--text-primary)" }}>
+          {segment.provider && isFlight ? `${segment.provider} · ` : ""}
           {segment.origin.name} → {segment.destination.name}
         </p>
         <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
           {segment.distance_km != null ? `${segment.distance_km.toFixed(0)} km` : ""} · {Math.floor(durationMin / 60)}h {durationMin % 60}m
+          {emission > 0 && ` · ${emission.toFixed(0)} kg CO₂e`}
         </p>
         {segment.search_url && (
           <a
@@ -67,11 +82,8 @@ export function TransportCard({ segment }: TransportCardProps) {
           </a>
         )}
       </div>
-      <div className="flex items-center gap-2">
+      <div className="flex items-center gap-2 flex-shrink-0">
         <CarbonBadge kg={emission} />
-        <span className="text-sm font-medium" style={{ color: "var(--text-primary)" }}>
-          {formatPrice(segment.price_usd)}
-        </span>
       </div>
     </div>
   );

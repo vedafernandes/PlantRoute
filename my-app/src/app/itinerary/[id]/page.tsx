@@ -12,7 +12,7 @@ import { ActivitySelector } from "@/components/Itinerary/ActivitySelector";
 import { HotelSelector } from "@/components/Itinerary/HotelSelector";
 import { SavePreferencesBanner } from "@/components/UI/SavePreferencesBanner";
 import { CarbonCompareModal } from "@/components/UI/CarbonCompareModal";
-import { formatPrice, formatDate } from "@/lib/utils";
+import { hotelPriceTier, formatDate } from "@/lib/utils";
 import { applyCarbonResult } from "@/lib/apply-carbon";
 import { scoreItinerary } from "@/lib/interest-scorer";
 import { HOTEL_FACTOR_PER_NIGHT } from "@/lib/carbon";
@@ -262,17 +262,7 @@ export default function ItineraryDetailPage() {
     if (!itinerary) return;
     setSaving(true);
     try {
-      const total_price_usd =
-        itinerary.days.reduce(
-          (s, d) =>
-            s +
-            (d.hotel?.price_per_night_usd ?? 0) +
-            d.activities.reduce((a, x) => a + x.price_usd, 0) +
-            d.transport.reduce((t, x) => t + x.price_usd, 0),
-          0
-        ) || itinerary.total_price_usd;
-
-      const itineraryToSave = { ...itinerary, total_price_usd };
+      const itineraryToSave = { ...itinerary, total_price_usd: 0 };
       const carbonRes = await fetch("/api/infer/carbon", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -361,15 +351,6 @@ export default function ItineraryDetailPage() {
   );
   const totalKg = Math.max(0.01, transportKg + activityKg + hotelKg);
 
-  const totalPriceUsd =
-    itinerary.days.reduce(
-      (s, d) =>
-        s +
-        (d.hotel?.price_per_night_usd ?? 0) +
-        d.activities.reduce((a, x) => a + x.price_usd, 0) +
-        d.transport.reduce((t, x) => t + x.price_usd, 0),
-      0
-    ) || itinerary.total_price_usd;
   const stars = Math.min(5, Math.max(1, Math.round(itinerary.interest_match_score * 5)));
 
   const selectedActivityIds = new Set(
@@ -468,7 +449,7 @@ export default function ItineraryDetailPage() {
                   <div className="min-w-0 flex-1">
                     <p className="font-medium text-sm">Hotel: {day.hotel.name}</p>
                     <p className="text-xs" style={{ color: "var(--text-muted)" }}>
-                      {formatPrice(day.hotel.price_per_night_usd)}/night
+                      {hotelPriceTier(day.hotel.price_per_night_usd)}
                     </p>
                   </div>
                   {isEditMode && (
@@ -620,12 +601,12 @@ export default function ItineraryDetailPage() {
               {totalKg.toFixed(0)} kg CO₂e
             </p>
             <p className="text-center text-sm mb-4" style={{ color: "var(--text-muted)" }}>
-              Total · {formatPrice(totalPriceUsd)}
+              {itinerary.days.length} days
             </p>
             <div className="flex items-center justify-center gap-1 mb-4">
               {Array.from({ length: 5 }).map((_, i) => (
                 <Star
-                  key={i}
+                  key={`star-${i}`}
                   className="w-4 h-4"
                   fill={i < stars ? "var(--accent-amber)" : "transparent"}
                   style={{ color: i < stars ? "var(--accent-amber)" : "var(--border)" }}

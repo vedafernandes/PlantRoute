@@ -7,7 +7,7 @@ import type { Activity } from "@/types";
 import type { NormalizedPlace } from "@/types";
 import { normalizedPlaceToActivity } from "@/lib/places-utils";
 import { LoadingRoute } from "@/components/UI/LoadingRoute";
-import { formatPrice } from "@/lib/utils";
+import { activityPriceTier, formatPrice } from "@/lib/utils";
 import {
   UtensilsCrossed,
   MapPin,
@@ -136,7 +136,7 @@ export function CityModal({ city, onClose, onBuildItinerary }: CityModalProps) {
                         {act.name}
                       </p>
                       <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
-                        {act.price_tier ?? formatPrice(act.price_usd)} · {act.duration_hours}h
+                        {act.price_tier ?? activityPriceTier(act.price_usd ?? 0)} · {act.duration_hours}h
                       </p>
                     </div>
                   </div>

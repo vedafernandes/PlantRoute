@@ -14,6 +14,23 @@ export function formatPrice(usd: number): string {
   }).format(usd);
 }
 
+/** Relative price tier for hotels: $ to $$$$ from approximate per-night USD. */
+export function hotelPriceTier(pricePerNightUsd: number): string {
+  if (pricePerNightUsd <= 0) return "—";
+  if (pricePerNightUsd < 100) return "$";
+  if (pricePerNightUsd < 200) return "$$";
+  if (pricePerNightUsd < 350) return "$$$";
+  return "$$$$";
+}
+
+/** Relative price tier for attractions/activities: $ to $$$$ from approximate USD. */
+export function activityPriceTier(priceUsd: number): string {
+  if (priceUsd < 15) return "$";
+  if (priceUsd < 40) return "$$";
+  if (priceUsd < 80) return "$$$";
+  return "$$$$";
+}
+
 export function formatCarbon(kg: number): string {
   return `${kg.toFixed(1)} kg CO₂e`;
 }

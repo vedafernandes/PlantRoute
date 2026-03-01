@@ -2,37 +2,29 @@ import { NextRequest, NextResponse } from "next/server";
 import { validateQuery } from "@/lib/validate";
 import { FlightsQuerySchema } from "@/lib/schemas";
 import { withRateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { getGoogleFlightsSegment, buildGoogleFlightsUrl } from "@/lib/google-flights";
+import { computeFlightEmissions, type FlightLeg } from "@/lib/travel-impact-model";
 import { findRealFlights } from "@/lib/gemini";
 import { getAirportCoords } from "@/lib/airport-coords";
 import { haversine } from "@/lib/haversine";
-import {
-  EMISSION_FACTORS,
-  RADIATIVE_FORCING_MULTIPLIER,
-} from "@/lib/carbon";
+import { EMISSION_FACTORS, RADIATIVE_FORCING_MULTIPLIER } from "@/lib/carbon";
 import type { TransportSegment } from "@/types";
 
-function addDistanceAndEmission(seg: TransportSegment): TransportSegment {
-  const origCoords = getAirportCoords(seg.origin.name);
-  const destCoords = getAirportCoords(seg.destination.name);
-  let distance_km = seg.distance_km;
-  if (distance_km == null && origCoords && destCoords) {
-    distance_km = haversine(origCoords[0], origCoords[1], destCoords[0], destCoords[1]);
-    distance_km = Math.round(distance_km * 100) / 100;
-  }
-  if (distance_km == null) distance_km = 0;
-  const mode = distance_km >= 1500 ? "flight_long" : "flight_short";
-  const factor = mode === "flight_long" ? EMISSION_FACTORS.flight_long : EMISSION_FACTORS.flight_short;
-  const emission_kg = Math.round(
-    distance_km * factor * RADIATIVE_FORCING_MULTIPLIER * 1000
-  ) / 1000;
-  const origin = origCoords
-    ? { ...seg.origin, lat: origCoords[0], lng: origCoords[1] }
-    : seg.origin;
-  const destination = destCoords
-    ? { ...seg.destination, lat: destCoords[0], lng: destCoords[1] }
-    : seg.destination;
-  return { ...seg, mode, origin, destination, distance_km, emission_kg };
+/** Remove segments that have the same distance, duration, and emissions (keep first of each). */
+function dedupeFlights(segments: TransportSegment[]): TransportSegment[] {
+  const seen = new Set<string>();
+  return segments.filter((s) => {
+    const d = s.distance_km ?? 0;
+    const key = `${Math.round(d)}|${s.duration_minutes}|${Math.round(s.emission_kg ?? 0)}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
+
+/**
+ * Flights: Amadeus + Travel Impact Model when keys set; else redirect-only (distance-based CO₂e).
+ */
 
 export async function GET(req: NextRequest) {
   const rateLimitResponse = await withRateLimit(req, RATE_LIMITS.amadeus, null);
@@ -44,79 +36,104 @@ export async function GET(req: NextRequest) {
   if (validated.error) return validated.error;
 
   const { origin, destination, date, adults } = validated.data;
+  const originCode = origin.trim().toUpperCase().slice(0, 3);
+  const destCode = destination.trim().toUpperCase().slice(0, 3);
 
-  /** One-way Expedia flight search URL for this route (actual distances/prices). */
-  const expediaSearchUrl = `https://www.expedia.com/Flights-Search?trip=oneway&leg1=from:${encodeURIComponent(origin)},to:${encodeURIComponent(destination)},departure:${date}TANYT&passengers=adults:${adults ?? 1},children:0,seniors:0,infantinlap:Y&options=cabinclass%3Aeconomy&mode=search`;
-
-  const hasAmadeus =
-    process.env.AMADEUS_API_KEY?.trim() && process.env.AMADEUS_API_SECRET?.trim();
-
-  if (!hasAmadeus) {
-    const raw: TransportSegment = {
-      id: `mock-flight-${origin}-${destination}`,
-      mode: "flight_short",
-      origin: { lat: 0, lng: 0, name: origin },
-      destination: { lat: 0, lng: 0, name: destination },
-      price_usd: 150,
-      duration_minutes: 120,
-      search_url: expediaSearchUrl,
-    };
-    const segments = [addDistanceAndEmission(raw)];
-    return NextResponse.json({ flights: segments, source: "fallback_mock" });
-  }
-
-  try {
-    const flights = await findRealFlights(
-      process.env.GEMINI_API_KEY?.trim() ?? "",
-      origin,
-      destination,
-      date,
-      adults
-    );
-    if (flights.length > 0) {
-      const rawSegments: TransportSegment[] = flights.slice(0, 5).map((flight, i) => {
-        const segmentId = [flight.airline, flight.flight_number, flight.id]
-          .filter(Boolean)
-          .join("-")
-          .replace(/\s+/g, "");
-        return {
-          id: segmentId || `flight-${i}`,
-          mode: "flight_short",
-          origin: { lat: 0, lng: 0, name: flight.origin_iata || origin },
-          destination: { lat: 0, lng: 0, name: flight.destination_iata || destination },
-          price_usd: flight.price_usd > 0 ? flight.price_usd : 150,
-          duration_minutes: flight.duration_minutes > 0 ? flight.duration_minutes : 120,
-          provider: flight.airline,
-          search_url: expediaSearchUrl,
-        };
-      });
-      const segments = rawSegments.map(addDistanceAndEmission);
-      return NextResponse.json({ flights: segments, source: "real_amadeus" });
+  const travelImpactKey = process.env.GOOGLE_TRAVEL_IMPACT_API_KEY?.trim() || process.env.GOOGLE_CLOUD_API_KEY?.trim();
+  const hasAmadeus = process.env.AMADEUS_API_KEY?.trim() && process.env.AMADEUS_API_SECRET?.trim();
+  if (travelImpactKey && hasAmadeus) {
+    try {
+      const flights = await findRealFlights(
+        process.env.GEMINI_API_KEY?.trim() ?? "",
+        originCode,
+        destCode,
+        date,
+        adults ?? 1
+      );
+      if (flights.length > 0) {
+        const [y, m, d] = date.split("-").map(Number);
+        const legs: FlightLeg[] = flights.slice(0, 5).map((f) => {
+          const numMatch = f.flight_number.replace(/\D/g, "") || "0";
+          return {
+            origin: f.origin_iata,
+            destination: f.destination_iata,
+            operatingCarrierCode: f.airline.length === 2 ? f.airline : f.airline.slice(0, 2),
+            flightNumber: parseInt(numMatch, 10) || 0,
+            departureDate: { year: y, month: m, day: d },
+          };
+        });
+        const emissionsKg = await computeFlightEmissions(travelImpactKey, legs);
+        const bookingUrl = buildGoogleFlightsUrl(originCode, destCode, date);
+        const origCoords = getAirportCoords(originCode);
+        const destCoords = getAirportCoords(destCode);
+        const segments: TransportSegment[] = flights.slice(0, 5).map((f, i) => {
+          const oCoord = getAirportCoords(f.origin_iata);
+          const dCoord = getAirportCoords(f.destination_iata);
+          const fromCoords =
+            oCoord && dCoord
+              ? Math.round(haversine(oCoord[0], oCoord[1], dCoord[0], dCoord[1]) * 100) / 100
+              : null;
+          const distance_km = fromCoords ?? Math.round((f.duration_minutes / 60) * 800 * 100) / 100;
+          const mode = f.duration_minutes >= 180 ? "flight_long" : "flight_short";
+          const distForEmission = distance_km;
+          const factor = mode === "flight_long" ? EMISSION_FACTORS.flight_long : EMISSION_FACTORS.flight_short;
+          const fallbackEmission = Math.round(distForEmission * factor * RADIATIVE_FORCING_MULTIPLIER * 1000) / 1000;
+          const emission_kg = (emissionsKg[i] != null && emissionsKg[i] > 0) ? emissionsKg[i]! : fallbackEmission;
+          return {
+            id: `${f.id ?? "flight"}-${i}`,
+            mode,
+            origin: {
+              lat: origCoords?.[0] ?? 0,
+              lng: origCoords?.[1] ?? 0,
+              name: f.origin_iata,
+            },
+            destination: {
+              lat: destCoords?.[0] ?? 0,
+              lng: destCoords?.[1] ?? 0,
+              name: f.destination_iata,
+            },
+            distance_km,
+            emission_kg,
+            price_usd: 0,
+            duration_minutes: f.duration_minutes,
+            provider: f.airline,
+            provider_logo_url: `https://images.kiwi.com/airlines/64/${f.airline.slice(0, 2)}.png`,
+            search_url: bookingUrl,
+          };
+        });
+        return NextResponse.json({ flights: dedupeFlights(segments), source: "amadeus_travel_impact_free" });
+      }
+    } catch {
+      // fall through to redirect-only
     }
-
-    const raw: TransportSegment = {
-      id: `fallback-flight-${origin}-${destination}`,
-      mode: "flight_short",
-      origin: { lat: 0, lng: 0, name: origin },
-      destination: { lat: 0, lng: 0, name: destination },
-      price_usd: 150,
-      duration_minutes: 120,
-      search_url: expediaSearchUrl,
-    };
-    const segments = [addDistanceAndEmission(raw)];
-    return NextResponse.json({ flights: segments, source: "fallback_mock" });
-  } catch {
-    const raw: TransportSegment = {
-      id: `fallback-flight-${origin}-${destination}`,
-      mode: "flight_short",
-      origin: { lat: 0, lng: 0, name: origin },
-      destination: { lat: 0, lng: 0, name: destination },
-      price_usd: 150,
-      duration_minutes: 120,
-      search_url: expediaSearchUrl,
-    };
-    const segments = [addDistanceAndEmission(raw)];
-    return NextResponse.json({ flights: segments, source: "fallback_mock" });
   }
-}
 
+  const gf = getGoogleFlightsSegment(originCode, destCode, date);
+  const origCoords = getAirportCoords(originCode);
+  const destCoords = getAirportCoords(destCode);
+
+  const segment: TransportSegment = {
+    id: `flight-${originCode}-${destCode}-${date}`,
+    mode: gf.mode,
+    origin: {
+      lat: origCoords?.[0] ?? 0,
+      lng: origCoords?.[1] ?? 0,
+      name: originCode,
+    },
+    destination: {
+      lat: destCoords?.[0] ?? 0,
+      lng: destCoords?.[1] ?? 0,
+      name: destCode,
+    },
+    distance_km: gf.distance_km,
+    emission_kg: gf.co2e_estimate_kg,
+    price_usd: 0,
+    duration_minutes: gf.duration_minutes,
+    search_url: gf.booking_url,
+  };
+
+  return NextResponse.json({
+    flights: [segment],
+    source: "google_flights_redirect",
+  });
+}

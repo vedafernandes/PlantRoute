@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import type { Itinerary } from "@/types";
-import { formatPrice } from "@/lib/utils";
 
 interface CarbonCompareModalProps {
   itinerary: Itinerary;
@@ -80,13 +79,11 @@ export function CarbonCompareModal({
             <div className="grid grid-cols-2 gap-4 mb-6">
               <div className="rounded-xl p-4 border" style={{ borderColor: "var(--border)" }}>
                 <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Original</p>
-                <p className="font-medium">{formatPrice(displayOriginal.total_price_usd)}</p>
-                <p className="text-sm">{displayOriginal.total_emission_kg.toFixed(0)} kg CO₂e</p>
+                <p className="text-sm font-medium">{displayOriginal.total_emission_kg.toFixed(0)} kg CO₂e</p>
               </div>
               <div className="rounded-xl p-4 border" style={{ borderColor: "var(--accent-green-mid)" }}>
                 <p className="text-xs mb-1" style={{ color: "var(--text-muted)" }}>Alternative</p>
-                <p className="font-medium">{alternative ? formatPrice(alternative.total_price_usd) : "—"}</p>
-                <p className="text-sm">{alternative ? `${alternative.total_emission_kg.toFixed(0)} kg CO₂e` : "—"}</p>
+                <p className="text-sm font-medium">{alternative ? `${alternative.total_emission_kg.toFixed(0)} kg CO₂e` : "—"}</p>
               </div>
             </div>
             <div className="flex gap-3">
