@@ -70,7 +70,8 @@ export default function ProfileClient({ user: userProp }: ProfileClientProps) {
   const today = new Date().toISOString().slice(0, 10);
   const pastTrips = allTrips.filter((t) => t.date < today);
   const savedItineraries = allTrips.filter((t) => t.date >= today);
-  const displayedTrips = tripsView === "past" ? pastTrips : savedItineraries;
+  const displayedTrips =
+    tripsView === "past" ? pastTrips : [...savedItineraries].reverse();
 
   useEffect(() => {
     load();

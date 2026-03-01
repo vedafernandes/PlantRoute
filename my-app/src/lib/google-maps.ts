@@ -305,9 +305,10 @@ export async function fetchDirectionsForMode(
         }>;
       }>;
     };
-    if (data.status !== "OK" || !data.routes?.[0]?.legs?.[0]) return null;
+    if (data.status !== "OK" || !data.routes?.[0]) return null;
     const route = data.routes[0];
-    const leg = route.legs[0];
+    const leg = route.legs?.[0];
+    if (!leg) return null;
     const distM = leg.distance?.value ?? 0;
     const durS = leg.duration_in_traffic?.value ?? leg.duration?.value ?? 0;
     const fare = route.fare?.value;
