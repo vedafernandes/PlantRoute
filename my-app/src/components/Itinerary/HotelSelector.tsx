@@ -12,6 +12,8 @@ interface HotelSelectorProps {
   onSelect: (hotel: Hotel) => void;
   loading?: boolean;
   emptyMessage?: string | null;
+  /** When set, display total trip CO₂ (stay + transport to attractions) so it varies by distance. */
+  numNights?: number;
 }
 
 export function HotelSelector({
@@ -20,6 +22,7 @@ export function HotelSelector({
   onSelect,
   loading = false,
   emptyMessage = null,
+  numNights,
 }: HotelSelectorProps) {
   if (loading) {
     return (
@@ -46,10 +49,13 @@ export function HotelSelector({
         Choose your hotel. Lower-carbon options are shown first.
       </p>
       <div className="space-y-3 max-h-80 overflow-y-auto pr-1">
-        {hotels.map((hotel) => {
+        {hotels.map((hotel, index) => {
           const isSelected = selectedHotel?.id === hotel.id;
-          const emission = hotel.emission_kg_per_night ?? 15;
-          const isLowCarbon = emission <= 11;
+          const stayPerNight = hotel.emission_kg_per_night ?? 15;
+          const nights = numNights ?? 1;
+          const transportKg = hotel.estimated_transport_kg ?? 0;
+          const emission = stayPerNight * nights + transportKg;
+          const isLowCarbon = index < 2 || (transportKg === 0 && stayPerNight <= 11);
 
           return (
             <motion.button
@@ -106,6 +112,11 @@ export function HotelSelector({
                 </div>
                 <div className="flex-shrink-0">
                   <CarbonBadge kg={emission} />
+                  {transportKg > 0 && (
+                    <p className="text-xs mt-0.5" style={{ color: "var(--text-muted)" }}>
+                      incl. transport to activities
+                    </p>
+                  )}
                 </div>
               </div>
             </motion.button>

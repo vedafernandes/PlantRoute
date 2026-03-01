@@ -1,6 +1,6 @@
 /**
  * Client-side type definitions for carbon API.
- * Emission factors match modal/carbon_predictor.py and local fallback.
+ * Emission factors used by src/lib/carbon-local.ts (single source of truth).
  */
 import type { Itinerary, CarbonResult } from "@/types";
 

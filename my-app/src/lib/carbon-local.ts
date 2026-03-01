@@ -1,6 +1,6 @@
 /**
- * Local TypeScript carbon predictor — same logic as modal/carbon_predictor.py.
- * Used when MODAL_TOKEN is not set.
+ * Carbon predictor: computes CO₂e for transport, activities, and hotel from itinerary.
+ * Used by POST /api/infer/carbon and by client fallback when the API fails.
  */
 import type { Itinerary, CarbonResult, CarbonItem } from "@/types";
 import { haversine } from "./haversine";
@@ -19,10 +19,13 @@ export function carbonPredictorLocal(itinerary: Itinerary): CarbonResult {
       const mode = seg.mode;
       const origin = seg.origin;
       const dest = seg.destination;
-      const distKm =
+      const fromCoords =
         origin && dest
           ? haversine(origin.lat, origin.lng, dest.lat, dest.lng)
-          : seg.distance_km ?? 0;
+          : 0;
+      // Use segment distance when coords are missing or zero (e.g. flight IATA-only)
+      const distKm =
+        fromCoords > 0 ? fromCoords : (seg.distance_km ?? 0);
 
       let emission: number;
       if (mode.startsWith("flight")) {

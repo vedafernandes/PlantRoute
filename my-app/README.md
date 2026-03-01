@@ -32,15 +32,13 @@ Build travel itineraries with carbon impact. Pick a destination on the map, desc
    Open [http://localhost:3000](http://localhost:3000).
 
 4. **Modal (optional)**  
-   To deploy regret inference and/or the carbon predictor on Modal (run from `my-app/`):
+   To deploy the preference engine (XGBoost) on Modal (run from `my-app/`):
    ```bash
    pip install modal
    modal token set
-   modal deploy modal_apps/preference_engine.py
-   modal deploy modal_apps/regret_protection_engine.py
-   modal deploy modal_apps/carbon_predictor.py
+   modal deploy modal_apps/preference_engine_xgboost.py
    ```
-   Use `modal deploy` (not `modal run`) — it deploys the web endpoints. Copy the URLs shown into `.env.local` as `MODAL_PREFERENCE_URL`, `MODAL_REGRET_URL`, `MODAL_CARBON_URL`, and set `MODAL_TOKEN`.
+   Copy the URL into `.env` as `PREFERENCE_ENGINE_XGBOOST_URL`. Carbon is computed in-app (`src/lib/carbon-local.ts`). See `modal_apps/MODAL_SETUP.md` for details.
 
 ## Deploy
 
@@ -51,10 +49,10 @@ Build travel itineraries with carbon impact. Pick a destination on the map, desc
 
 - `src/app` — App Router pages (map, itinerary detail, profile, sign-in).
 - `src/app/api` — API routes: parse preferences, carbon, Amadeus (activities/hotels/flights), Supermemory (save/retrieve).
-- `src/components` — Map (WorldMap, CityModal), Itinerary (builder, cards), UI (CarbonBadge, RegretModal, etc.).
-- `src/lib` — Utilities: carbon (local predictor), haversine, itinerary-builder, interest-scorer, Amadeus/Gemini/Supermemory wrappers, validation, rate limiting.
+- `src/components` — Map (WorldMap, CityModal), Itinerary (builder, cards), UI (CarbonBadge, CarbonCompareModal, etc.).
+- `src/lib` — Utilities: carbon (local predictor), carbon-grid (free grid intensity via Nominatim + static country data), carbon-from-grid (trip CO₂ from grid), haversine, itinerary-builder, interest-scorer, Amadeus/Gemini/Supermemory wrappers, validation, rate limiting.
 - `src/types` — Shared TypeScript types.
-- `modal_apps` — Modal Python apps (preference_engine, regret_protection_engine, carbon_predictor). Named `modal_apps` to avoid shadowing the `modal` package.
+- `modal_apps` — Modal Python app: `preference_engine_xgboost` (activity ranking). Carbon: grid-based via `src/lib/carbon-from-grid.ts` (free: Nominatim + country intensity); falls back to `src/lib/carbon-local.ts` if grid lookup fails.
 
 ## Features
 

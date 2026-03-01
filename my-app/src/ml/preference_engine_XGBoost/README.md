@@ -50,7 +50,7 @@ From `my-app` (after training so `artifacts/model.joblib` exists):
 modal deploy modal_apps/preference_engine_xgboost.py
 ```
 
-Set **`PREFERENCE_ENGINE_XGBOOST_URL`** to the deployed URL (e.g. `https://<workspace>--preference-engine-xgboost.modal.run`). The app uses this for ranking attractions; the linear-regression preference engine (`ml/preference_engine` and `modal_apps/preference_engine.py`) is no longer used for recommendations but remains in the repo.
+Set **`PREFERENCE_ENGINE_XGBOOST_URL`** to the deployed URL (e.g. `https://<workspace>--preference-engine-xgboost.modal.run`). The app uses this for ranking attractions. Only this XGBoost app is deployed to Modal; the linear `ml/preference_engine` remains in the repo for reference but is not deployed.
 
 ## Use from Next.js
 

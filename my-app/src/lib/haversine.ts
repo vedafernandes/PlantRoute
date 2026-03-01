@@ -1,6 +1,6 @@
 /**
  * Haversine formula — great-circle distance in km.
- * Mirrors the Python implementation in modal/carbon_predictor.py.
+ * Used by carbon-local and schedule-activities.
  */
 export function haversine(
   lat1: number,

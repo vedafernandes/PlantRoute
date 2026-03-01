@@ -7,20 +7,23 @@ import { X, ArrowLeft } from "lucide-react";
 import type { GeoPoint } from "@/types";
 import type {
   Itinerary,
+  StoredItinerary,
   UserPreferences,
   Hotel,
   Activity,
   ItineraryDay,
   TransportSegment,
+  CarbonResult,
 } from "@/types";
 import type { NormalizedPlace } from "@/types";
 import { normalizedPlaceToHotel } from "@/lib/places-utils";
 import { scoreItinerary } from "@/lib/interest-scorer";
 import { applyCarbonResult } from "@/lib/apply-carbon";
+import { carbonPredictorLocal } from "@/lib/carbon-local";
 import { HotelSelector } from "./HotelSelector";
 import { ActivitySelector } from "./ActivitySelector";
 import { TravelOptionsPanel } from "./TravelOptionsPanel";
-import { RegretModal } from "@/components/UI/RegretModal";
+import { CarbonCompareModal } from "@/components/UI/CarbonCompareModal";
 import { formatDate } from "@/lib/utils";
 
 const STORAGE_KEY = "plantroute_itineraries";
@@ -256,10 +259,20 @@ export function ItineraryBuilder({
         transport: [...d.transport],
       }));
       if (selectedArrival && days.length > 0) {
-        days[0].transport.unshift(selectedArrival);
+        const firstDate = days[0].date;
+        const arrival = {
+          ...selectedArrival,
+          id: selectedArrival.id || `arrival-${firstDate}`,
+        };
+        days[0].transport.unshift(arrival);
       }
       if (selectedDeparture && days.length > 0) {
-        days[days.length - 1].transport.push(selectedDeparture);
+        const lastDate = days[days.length - 1].date;
+        const departure = {
+          ...selectedDeparture,
+          id: selectedDeparture.id || `departure-${lastDate}`,
+        };
+        days[days.length - 1].transport.push(departure);
       }
 
       const total_price_usd =
@@ -293,29 +306,33 @@ export function ItineraryBuilder({
         body: JSON.stringify({ itinerary }),
         signal: AbortSignal.timeout(10000),
       });
+      let carbonData: CarbonResult;
       if (carbonRes.ok) {
-        const carbonData = await carbonRes.json();
-        const merged = applyCarbonResult(itinerary, {
-          items: carbonData.items ?? [],
-          total_kg: carbonData.total_kg ?? 0,
-        });
-        const scored = {
-          ...merged,
-          interest_match_score: scoreItinerary(merged, prefs),
-        };
-        setFinalItinerary(scored);
-
-        const stored =
-          typeof window !== "undefined"
-            ? window.localStorage.getItem(STORAGE_KEY)
-            : null;
-        const list: (Itinerary & { confirmed?: boolean })[] = stored ? JSON.parse(stored) : [];
-        if (!list.find((i) => i.id === scored.id)) list.push({ ...scored, confirmed: false });
-        if (typeof window !== "undefined") {
-          window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-        }
+        carbonData = await carbonRes.json();
       } else {
-        setFinalItinerary(itinerary);
+        carbonData = carbonPredictorLocal(itinerary);
+      }
+      const merged = applyCarbonResult(itinerary, {
+        items: carbonData.items ?? [],
+        total_kg: carbonData.total_kg ?? 0,
+      });
+      const scored = {
+        ...merged,
+        interest_match_score: scoreItinerary(merged, prefs),
+      };
+      setFinalItinerary(scored);
+
+      const stored =
+        typeof window !== "undefined"
+          ? window.localStorage.getItem(STORAGE_KEY)
+          : null;
+      const list: StoredItinerary[] = stored ? JSON.parse(stored) : [];
+      const originalSnapshot = JSON.parse(JSON.stringify(scored)) as Itinerary;
+      if (!list.find((i) => i.id === scored.id)) {
+        list.push({ ...scored, confirmed: false, originalItinerary: originalSnapshot });
+      }
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
       }
       setStep(7);
     } catch (e) {
@@ -551,6 +568,11 @@ export function ItineraryBuilder({
                   onSelect={setSelectedHotel}
                   loading={loadingHotels}
                   emptyMessage={hotelsMessage}
+                  numNights={
+                    startDate && endDate
+                      ? Math.max(1, Math.ceil((new Date(endDate).getTime() - new Date(startDate).getTime()) / (24 * 60 * 60 * 1000)))
+                      : undefined
+                  }
                 />
                 <button
                   type="button"
@@ -821,20 +843,38 @@ export function ItineraryBuilder({
       </motion.div>
 
       {regretItinerary && originalItineraryForRegret && (
-        <RegretModal
+        <CarbonCompareModal
           itinerary={regretItinerary}
           originalItinerary={originalItineraryForRegret}
           onClose={() => setRegretItinerary(null)}
-          onKeepOriginal={() => setFinalItinerary(originalItineraryForRegret)}
+          onKeepOriginal={() => {
+            setFinalItinerary(originalItineraryForRegret);
+            if (typeof window !== "undefined") {
+              const stored = window.localStorage.getItem(STORAGE_KEY);
+              const list: StoredItinerary[] = stored ? JSON.parse(stored) : [];
+              const idx = list.findIndex((i) => i.id === originalItineraryForRegret.id);
+              if (idx >= 0) {
+                list[idx] = {
+                  ...originalItineraryForRegret,
+                  confirmed: list[idx]!.confirmed,
+                  originalItinerary: originalItineraryForRegret,
+                };
+                window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+              }
+            }
+          }}
           onSwitch={(alt) => {
             setFinalItinerary(alt);
             setRegretItinerary(null);
             if (typeof window !== "undefined") {
               const stored = window.localStorage.getItem(STORAGE_KEY);
-              const list: (Itinerary & { confirmed?: boolean })[] = stored ? JSON.parse(stored) : [];
+              const list: StoredItinerary[] = stored ? JSON.parse(stored) : [];
               const idx = list.findIndex((i) => i.id === alt.id);
-              if (idx >= 0) list[idx] = { ...alt, confirmed: false };
-              else list.push({ ...alt, confirmed: false });
+              const existing = idx >= 0 ? list[idx]! : null;
+              const storedOriginal = existing?.originalItinerary ?? originalItineraryForRegret;
+              const entry: StoredItinerary = { ...alt, confirmed: false, originalItinerary: storedOriginal };
+              if (idx >= 0) list[idx] = entry;
+              else list.push(entry);
               window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
             }
           }}

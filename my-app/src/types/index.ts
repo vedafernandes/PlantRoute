@@ -80,6 +80,8 @@ export interface Hotel {
   price_per_night_usd: number;
   stars: number;
   emission_kg_per_night?: number;
+  /** Estimated transport CO₂ (kg) for round trips hotel ↔ attractions over the stay; set when attractions are known. */
+  estimated_transport_kg?: number;
   amadeus_id?: string;
   image_url?: string;
 }
@@ -102,6 +104,13 @@ export interface Itinerary {
   interest_match_score: number;
   regret_score: number;
 }
+
+/** List item in localStorage: may include original itinerary for carbon compare. */
+export type StoredItinerary = Itinerary & {
+  confirmed?: boolean;
+  /** Snapshot of the plan before switching to a lower-carbon alternative; used to toggle back. */
+  originalItinerary?: Itinerary;
+};
 
 export interface CarbonItem {
   id: string;

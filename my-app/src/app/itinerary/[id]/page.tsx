@@ -4,13 +4,13 @@ import { useParams, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useState, useCallback } from "react";
 import { useSession, signIn } from "next-auth/react";
 import Link from "next/link";
-import type { Itinerary, ItineraryDay, Activity, Hotel } from "@/types";
+import type { Itinerary, ItineraryDay, Activity, Hotel, StoredItinerary } from "@/types";
 import { ActivityCard } from "@/components/Itinerary/ActivityCard";
 import { TransportCard } from "@/components/Itinerary/TransportCard";
 import { ActivitySelector } from "@/components/Itinerary/ActivitySelector";
 import { HotelSelector } from "@/components/Itinerary/HotelSelector";
 import { SavePreferencesBanner } from "@/components/UI/SavePreferencesBanner";
-import { RegretModal } from "@/components/UI/RegretModal";
+import { CarbonCompareModal } from "@/components/UI/CarbonCompareModal";
 import { formatPrice, formatDate } from "@/lib/utils";
 import { applyCarbonResult } from "@/lib/apply-carbon";
 import { scoreItinerary } from "@/lib/interest-scorer";
@@ -83,7 +83,7 @@ export default function ItineraryDetailPage() {
     if (!confirm("Delete this trip? This cannot be undone.")) return;
     if (typeof window === "undefined") return;
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    const list: Itinerary[] = raw ? JSON.parse(raw) : [];
+    const list: StoredItinerary[] = raw ? JSON.parse(raw) : [];
     const filtered = list.filter((i) => i.id !== id);
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(filtered));
     router.push("/profile");
@@ -92,9 +92,11 @@ export default function ItineraryDetailPage() {
   const loadItinerary = useCallback(() => {
     if (typeof window === "undefined") return;
     const raw = window.localStorage.getItem(STORAGE_KEY);
-    const list: (Itinerary & { confirmed?: boolean })[] = raw ? JSON.parse(raw) : [];
+    const list: StoredItinerary[] = raw ? JSON.parse(raw) : [];
     const found = list.find((i) => i.id === id);
+    const stored = found as StoredItinerary | undefined;
     setItinerary(found ? JSON.parse(JSON.stringify(found)) : null);
+    setOriginalItinerary(stored?.originalItinerary ?? null);
     setShowSaveBanner(list.length >= 1);
   }, [id]);
 
@@ -564,7 +566,9 @@ export default function ItineraryDetailPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setOriginalItinerary((prev) => prev ?? JSON.parse(JSON.stringify(itinerary)));
+                    if (!originalItinerary) {
+                      setOriginalItinerary(JSON.parse(JSON.stringify(itinerary)) as Itinerary);
+                    }
                     setRegretOpen(true);
                   }}
                   className="w-full py-3 rounded-xl font-medium border"
@@ -642,29 +646,39 @@ export default function ItineraryDetailPage() {
       )}
 
       {regretOpen && itinerary && originalItinerary && (
-        <RegretModal
+        <CarbonCompareModal
           itinerary={itinerary}
           originalItinerary={originalItinerary}
           onClose={() => setRegretOpen(false)}
           onKeepOriginal={() => {
             setItinerary(originalItinerary);
             const raw = window.localStorage.getItem(STORAGE_KEY);
-            const list: Itinerary[] = raw ? JSON.parse(raw) : [];
+            const list: StoredItinerary[] = raw ? JSON.parse(raw) : [];
             const idx = list.findIndex((i) => i.id === originalItinerary.id);
             if (idx >= 0) {
-              list[idx] = originalItinerary;
+              list[idx] = {
+                ...originalItinerary,
+                confirmed: list[idx]!.confirmed,
+                originalItinerary,
+              };
               window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
             }
+            setRegretOpen(false);
           }}
           onSwitch={(alt) => {
             setItinerary(alt);
             const raw = window.localStorage.getItem(STORAGE_KEY);
-            const list: Itinerary[] = raw ? JSON.parse(raw) : [];
+            const list: StoredItinerary[] = raw ? JSON.parse(raw) : [];
             const idx = list.findIndex((i) => i.id === alt.id);
-            if (idx >= 0) {
-              list[idx] = alt;
-              window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
-            }
+            const existing = idx >= 0 ? list[idx]! : null;
+            const entry: StoredItinerary = {
+              ...alt,
+              confirmed: existing?.confirmed,
+              originalItinerary,
+            };
+            if (idx >= 0) list[idx] = entry;
+            else list.push(entry);
+            window.localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
             setRegretOpen(false);
           }}
         />
@@ -672,3 +686,4 @@ export default function ItineraryDetailPage() {
     </div>
   );
 }
+
