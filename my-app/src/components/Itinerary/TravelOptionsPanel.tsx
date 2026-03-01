@@ -59,11 +59,7 @@ export function TravelOptionsPanel({
           Travel to destination
         </h3>
         <p className="text-xs mb-3" style={{ color: "var(--text-muted)" }}>
-<<<<<<< Updated upstream
           Flights plus lower-carbon alternatives (train, bus, drive). Sorted by carbon impact.
-=======
-          Route with estimated distance and CO₂e. Open Google Flights for real prices and times.
->>>>>>> Stashed changes
         </p>
         <div className="space-y-2">
           {arrivalOptions.length === 0 ? (

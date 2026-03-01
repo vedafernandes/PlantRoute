@@ -66,6 +66,12 @@ export function ItineraryBuilder({
   const [regretItinerary, setRegretItinerary] = useState<Itinerary | null>(null);
   const [originalItineraryForRegret, setOriginalItineraryForRegret] = useState<Itinerary | null>(null);
 
+  const [arrivalOptions, setArrivalOptions] = useState<TransportSegment[]>([]);
+  const [departureOptions, setDepartureOptions] = useState<TransportSegment[]>([]);
+  const [selectedArrival, setSelectedArrival] = useState<TransportSegment | null>(null);
+  const [selectedDeparture, setSelectedDeparture] = useState<TransportSegment | null>(null);
+  const [loadingFlights, setLoadingFlights] = useState(false);
+
   const { data: session } = useSession();
   const cityName = city.name.split(",")[0]?.trim() ?? city.name;
   const todayIso = new Date().toISOString().slice(0, 10);
@@ -83,6 +89,10 @@ export function ItineraryBuilder({
     setOriginalItineraryForRegret(null);
     setHotelsMessage(null);
     setHotelSuggestionReason(null);
+    setArrivalOptions([]);
+    setDepartureOptions([]);
+    setSelectedArrival(null);
+    setSelectedDeparture(null);
   }, [city.name, city.lat, city.lng]);
 
   const prefs: UserPreferences = preferences ?? {
@@ -263,6 +273,14 @@ export function ItineraryBuilder({
     }
   }, [step, startDate, endDate, cityName, city.lat, city.lng, startLocation.lat, startLocation.lng, startLocation.name]);
 
+  // Default to first option when arrival/departure options load
+  useEffect(() => {
+    if (arrivalOptions.length > 0 && selectedArrival === null) setSelectedArrival(arrivalOptions[0] ?? null);
+  }, [arrivalOptions]);
+  useEffect(() => {
+    if (departureOptions.length > 0 && selectedDeparture === null) setSelectedDeparture(departureOptions[0] ?? null);
+  }, [departureOptions]);
+
   const handleActivityToggle = useCallback((activity: Activity) => {
     setSelectedActivityIds((prev) => {
       const next = new Set(prev);
@@ -316,6 +334,23 @@ export function ItineraryBuilder({
         ...d,
         transport: [...d.transport],
       }));
+
+      const firstDay = days[0];
+      const lastDay = days[days.length - 1];
+      if (firstDay && selectedArrival) {
+        const arrivalSeg = {
+          ...selectedArrival,
+          id: selectedArrival.id || `arrival-${firstDay.date}`,
+        };
+        firstDay.transport = [arrivalSeg, ...firstDay.transport];
+      }
+      if (lastDay && selectedDeparture) {
+        const departureSeg = {
+          ...selectedDeparture,
+          id: selectedDeparture.id || `departure-${lastDay.date}`,
+        };
+        lastDay.transport = [...lastDay.transport, departureSeg];
+      }
 
       const itinerary: Itinerary = {
         id: crypto.randomUUID(),
@@ -379,6 +414,8 @@ export function ItineraryBuilder({
     startDate,
     endDate,
     prefs,
+    selectedArrival,
+    selectedDeparture,
   ]);
 
   const handleSelectItinerary = (it: Itinerary) => {
@@ -698,15 +735,65 @@ export function ItineraryBuilder({
                     </div>
                     <button
                       type="button"
-                      onClick={buildFinalItinerary}
-                      disabled={building}
-                      className="w-full py-3 rounded-xl font-medium text-white disabled:opacity-50"
+                      onClick={() => setStep(5)}
+                      className="w-full py-3 rounded-xl font-medium text-white"
                       style={{ background: "#2d6a4f" }}
                     >
-                      {building ? "Building…" : "Build itinerary"}
+                      Next: choose transport
                     </button>
                   </>
                 )}
+              </motion.div>
+            )}
+
+            {step === 5 && (
+              <motion.div
+                key="step5"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+                className="space-y-4"
+              >
+                <h3
+                  className="font-medium"
+                  style={{ color: "var(--text-primary)" }}
+                >
+                  5. Travel to destination
+                </h3>
+                <p className="text-sm" style={{ color: "var(--text-muted)" }}>
+                  Choose how you get from {startLocation.name.split(",")[0]?.trim() || "your city"} to {cityName} and back. Options include flights (when available), train, bus, and drive—sorted by carbon impact.
+                </p>
+                <div className="max-h-[50vh] overflow-y-auto pr-1">
+                  <TravelOptionsPanel
+                    arrivalOptions={arrivalOptions}
+                    departureOptions={departureOptions}
+                    selectedArrival={selectedArrival}
+                    selectedDeparture={selectedDeparture}
+                    onSelectArrival={setSelectedArrival}
+                    onSelectDeparture={setSelectedDeparture}
+                    interActivitySegments={dailyPlan.flatMap((d) => d.transport)}
+                    loading={loadingFlights}
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setStep(4)}
+                    className="flex-1 py-3 rounded-xl font-medium border"
+                    style={{ borderColor: "var(--border)", color: "var(--text-primary)" }}
+                  >
+                    Back
+                  </button>
+                  <button
+                    type="button"
+                    onClick={buildFinalItinerary}
+                    disabled={building || (arrivalOptions.length > 0 && !selectedArrival) || (departureOptions.length > 0 && !selectedDeparture)}
+                    className="flex-1 py-3 rounded-xl font-medium text-white disabled:opacity-50"
+                    style={{ background: "#2d6a4f" }}
+                  >
+                    {building ? "Building…" : "Build itinerary"}
+                  </button>
+                </div>
               </motion.div>
             )}
 
