@@ -139,7 +139,7 @@ export default function ItineraryDetailPage() {
   useEffect(() => {
     if (addActivityDayIndex === null || !cityName) return;
     setActivitiesLoading(true);
-    fetch(`/api/recommendations/activities?city=${encodeURIComponent(cityName)}&limit=20`, {
+    fetch(`/api/recommendations/activities?city=${encodeURIComponent(cityName)}&limit=50`, {
       signal: AbortSignal.timeout(15000),
     })
       .then((r) => r.json())

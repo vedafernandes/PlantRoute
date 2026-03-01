@@ -69,7 +69,7 @@ export const CarbonRequestSchema = z.object({
 export const ActivitiesQuerySchema = z.object({
   city: z.string().min(1).max(100).trim(),
   interests: z.string().max(500).optional(),
-  limit: z.coerce.number().int().min(1).max(50).default(20),
+  limit: z.coerce.number().int().min(1).max(80).default(50),
 });
 
 export const HotelsQuerySchema = z.object({

@@ -373,5 +373,5 @@ export async function fetchPlacesByCity(city: string): Promise<{
     }
   }
 
-  return { hotels, attractions: attractions.slice(0, 30) };
+  return { hotels, attractions: attractions.slice(0, 80) };
 }

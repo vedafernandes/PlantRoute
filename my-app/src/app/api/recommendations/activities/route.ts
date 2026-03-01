@@ -13,6 +13,7 @@ import {
 } from "@/lib/recommendations";
 import { categorizeActivitiesWithGemini } from "@/lib/gemini";
 import type { Activity } from "@/types";
+import { ATTRACTION_TYPES } from "@/types";
 import { normalizedPlaceToActivity } from "@/lib/places-utils";
 import type { NormalizedPlace } from "@/types";
 
@@ -26,6 +27,7 @@ export async function GET(req: NextRequest) {
   if (validated.error) return validated.error;
 
   const { city, limit } = validated.data;
+  const requestLimit = Math.max(limit, 45);
 
   let preferences = null;
   try {
@@ -43,7 +45,7 @@ export async function GET(req: NextRequest) {
   let activities: Activity[];
   try {
     const res = await fetch(
-      `${baseUrl}/api/amadeus/activities?city=${encodeURIComponent(city)}&limit=${limit}`,
+      `${baseUrl}/api/amadeus/activities?city=${encodeURIComponent(city)}&limit=${requestLimit}`,
       { cache: "no-store" }
     );
     if (!res.ok) {
@@ -143,5 +145,24 @@ export async function GET(req: NextRequest) {
     ranked = rankActivitiesFallback(activities, preferences?.interests ?? []);
   }
 
-  return NextResponse.json({ activities: ranked });
+  const minPerCategory = 5;
+  const byCategory = new Map<string, RankedActivity[]>();
+  for (const a of ranked) {
+    const cat = (a.category ?? "culture").toLowerCase();
+    if (!byCategory.has(cat)) byCategory.set(cat, []);
+    byCategory.get(cat)!.push(a);
+  }
+  const ordered: RankedActivity[] = [];
+  for (const cat of ATTRACTION_TYPES) {
+    const list = byCategory.get(cat) ?? [];
+    ordered.push(...list.slice(0, minPerCategory));
+  }
+  for (const cat of ATTRACTION_TYPES) {
+    const list = byCategory.get(cat) ?? [];
+    ordered.push(...list.slice(minPerCategory));
+  }
+  const uncategorized = ranked.filter((a) => !ATTRACTION_TYPES.includes((a.category ?? "").toLowerCase() as (typeof ATTRACTION_TYPES)[number]));
+  ordered.push(...uncategorized);
+
+  return NextResponse.json({ activities: ordered });
 }
