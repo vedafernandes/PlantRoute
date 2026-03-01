@@ -124,6 +124,7 @@ export default function ItineraryDetailPage() {
     fetch("/api/carbon/record", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      credentials: "same-origin",
       body: JSON.stringify({
         emissionKg: itinerary.total_emission_kg ?? 0,
         itineraryId: itinerary.id,
@@ -304,6 +305,7 @@ export default function ItineraryDetailPage() {
         fetch("/api/carbon/record", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          credentials: "same-origin",
           body: JSON.stringify({
             emissionKg: updated.total_emission_kg ?? 0,
             itineraryId: updated.id,

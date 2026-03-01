@@ -439,6 +439,7 @@ export function ItineraryBuilder({
       fetch("/api/carbon/record", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
+        credentials: "same-origin",
         body: JSON.stringify({
           emissionKg: it.total_emission_kg ?? 0,
           itineraryId: it.id,
