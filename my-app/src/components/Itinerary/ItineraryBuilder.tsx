@@ -26,8 +26,10 @@ import { TravelOptionsPanel } from "./TravelOptionsPanel";
 import { LocationSelect, DEFAULT_ORIGIN } from "./LocationSelect";
 import { CarbonCompareModal } from "@/components/UI/CarbonCompareModal";
 import { formatDate } from "@/lib/utils";
+import { haversine } from "@/lib/haversine";
 
 const STORAGE_KEY = "plantroute_itineraries";
+const FLIGHT_MIN_DISTANCE_KM = 500; /** Only show flight options when origin–destination > this */
 
 interface ItineraryBuilderProps {
   city: GeoPoint;
@@ -205,16 +207,29 @@ export function ItineraryBuilder({
       const originQuery = encodeURIComponent(startLocation.name.split(",")[0]?.trim() ?? startLocation.name);
       const destinationQuery = encodeURIComponent(cityName);
       const destinationCoords = { lat: city.lat, lng: city.lng, name: cityName };
+      const distanceKm = haversine(
+        startLocation.lat,
+        startLocation.lng,
+        city.lat,
+        city.lng
+      );
+      const includeFlights = distanceKm >= FLIGHT_MIN_DISTANCE_KM;
+
+      const flightPromises = includeFlights
+        ? [
+            fetch(
+              `/api/amadeus/flights?origin=${originQuery}&destination=${destinationQuery}&date=${startDate}&adults=1`,
+              { signal: AbortSignal.timeout(10000) }
+            ).then((r) => r.json()),
+            fetch(
+              `/api/amadeus/flights?origin=${destinationQuery}&destination=${originQuery}&date=${endDate}&adults=1`,
+              { signal: AbortSignal.timeout(10000) }
+            ).then((r) => r.json()),
+          ]
+        : [Promise.resolve({ flights: [] }), Promise.resolve({ flights: [] })];
 
       Promise.all([
-        fetch(
-          `/api/amadeus/flights?origin=${originQuery}&destination=${destinationQuery}&date=${startDate}&adults=1`,
-          { signal: AbortSignal.timeout(10000) }
-        ).then((r) => r.json()),
-        fetch(
-          `/api/amadeus/flights?origin=${destinationQuery}&destination=${originQuery}&date=${endDate}&adults=1`,
-          { signal: AbortSignal.timeout(10000) }
-        ).then((r) => r.json()),
+        ...flightPromises,
         fetch("/api/travel/alternatives", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
