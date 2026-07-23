@@ -10,6 +10,13 @@
 
 ---
 
+<img width="806" height="500" alt="image" src="https://github.com/user-attachments/assets/6af5a36a-6565-43f9-9309-f063cc47423e" />
+
+<img width="806" height="451" alt="image" src="https://github.com/user-attachments/assets/24de9577-2af6-47b9-8679-badd48d1bcf5" />
+
+<img width="806" height="456" alt="image" src="https://github.com/user-attachments/assets/74dd2f45-d133-4368-bee0-7c6553c80668" />
+
+
 ## The Problem
 
 Travel is one of life's great joys — but it has a real environmental cost. Tourism accounts for roughly **8% of global carbon emissions**, according to Sustainable Travel International. A single long-haul flight burns enough fuel to melt down tons of polar ice, and hotels run energy-hungry HVAC and amenities around the clock to keep guests comfortable.
